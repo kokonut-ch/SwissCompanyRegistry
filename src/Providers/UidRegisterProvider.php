@@ -99,9 +99,15 @@ final class UidRegisterProvider implements FindsCompanies, SearchesCompanies, Va
 
             $summary = $this->mapSummary($xpath, $item);
 
-            if ($summary !== null) {
-                $companies[] = $summary;
+            if ($summary === null) {
+                Log::debug('Swiss company registry: dropped a result item without a parseable UID.', [
+                    'provider' => $this->name(),
+                ]);
+
+                continue;
             }
+
+            $companies[] = $summary;
         }
 
         if ($query->limit !== null) {
@@ -129,7 +135,19 @@ final class UidRegisterProvider implements FindsCompanies, SearchesCompanies, Va
 
         $first = $organisations === false ? null : $organisations->item(0);
 
-        return $first instanceof DOMElement ? $this->mapCompany($xpath, $first) : null;
+        if (! $first instanceof DOMElement) {
+            return null;
+        }
+
+        $company = $this->mapCompany($xpath, $first);
+
+        if ($company === null) {
+            Log::debug('Swiss company registry: dropped a result item without a parseable UID.', [
+                'provider' => $this->name(),
+            ]);
+        }
+
+        return $company;
     }
 
     public function validateUid(Uid $uid): UidValidationResult
@@ -240,6 +258,10 @@ final class UidRegisterProvider implements FindsCompanies, SearchesCompanies, Va
 
         if (in_array($status, [502, 503, 504], true)) {
             throw RegistryUnavailableException::maintenance($this->name(), $status);
+        }
+
+        if ($status === 429) {
+            throw RegistryUnavailableException::rateLimited($this->name());
         }
 
         throw UnexpectedResponseException::fromStatus($this->name(), $status);

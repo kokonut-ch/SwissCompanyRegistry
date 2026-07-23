@@ -7,6 +7,7 @@ namespace Kokonut\SwissCompanyRegistry\Rules;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Kokonut\SwissCompanyRegistry\Enums\VatValidationResult;
+use Kokonut\SwissCompanyRegistry\Exceptions\UnsupportedCapabilityException;
 use Kokonut\SwissCompanyRegistry\Facades\SwissCompany;
 use Kokonut\SwissCompanyRegistry\Values\Uid;
 
@@ -34,7 +35,14 @@ class ActiveVatNumber implements ValidationRule
             return;
         }
 
-        $result = SwissCompany::validateVatId($value);
+        // A misconfigured provider chain must never turn a form submission
+        // into a 500: no provider offering the capability is treated the
+        // same as an unreachable one (Unknown), not as a hard failure.
+        try {
+            $result = SwissCompany::validateVatId($value);
+        } catch (UnsupportedCapabilityException) {
+            $result = VatValidationResult::Unknown;
+        }
 
         if ($result === VatValidationResult::Inactive) {
             $fail('The :attribute field is not an active Swiss VAT registration.');

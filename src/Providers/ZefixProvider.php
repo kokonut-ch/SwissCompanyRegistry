@@ -8,6 +8,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Kokonut\SwissCompanyRegistry\Contracts\FindsCompanies;
 use Kokonut\SwissCompanyRegistry\Contracts\SearchesCompanies;
 use Kokonut\SwissCompanyRegistry\Dto\Address;
@@ -88,9 +89,21 @@ final class ZefixProvider implements FindsCompanies, SearchesCompanies
         $companies = [];
 
         foreach ($data as $item) {
-            if (is_array($item) && ($summary = $this->mapSummary($item)) !== null) {
-                $companies[] = $summary;
+            if (! is_array($item)) {
+                continue;
             }
+
+            $summary = $this->mapSummary($item);
+
+            if ($summary === null) {
+                Log::debug('Swiss company registry: dropped a result item without a parseable UID.', [
+                    'provider' => $this->name(),
+                ]);
+
+                continue;
+            }
+
+            $companies[] = $summary;
         }
 
         if ($query->limit !== null) {
@@ -120,7 +133,19 @@ final class ZefixProvider implements FindsCompanies, SearchesCompanies
 
         $first = $data[0] ?? null;
 
-        return is_array($first) ? $this->mapCompany($first) : null;
+        if (! is_array($first)) {
+            return null;
+        }
+
+        $company = $this->mapCompany($first);
+
+        if ($company === null) {
+            Log::debug('Swiss company registry: dropped a result item without a parseable UID.', [
+                'provider' => $this->name(),
+            ]);
+        }
+
+        return $company;
     }
 
     /**
@@ -183,6 +208,10 @@ final class ZefixProvider implements FindsCompanies, SearchesCompanies
 
         if ($status === 429) {
             throw RegistryUnavailableException::rateLimited($this->name());
+        }
+
+        if ($status === 401 || $status === 403) {
+            throw new ConfigurationException("Zefix rejected the credentials (HTTP {$status}). Check ZEFIX_USERNAME and ZEFIX_PASSWORD.");
         }
 
         $errorType = $response->json('error.type');

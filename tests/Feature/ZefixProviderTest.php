@@ -86,6 +86,12 @@ it('reports other errors as unexpected responses', function (): void {
     zefixProvider()->search(SearchQuery::make('aubry'));
 })->throws(UnexpectedResponseException::class);
 
+it('reports rejected credentials as a configuration error', function (): void {
+    Http::fake(['www.zefix.admin.ch/*' => Http::response(null, 401)]);
+
+    zefixProvider()->search(SearchQuery::make('aubry'));
+})->throws(ConfigurationException::class, 'credentials');
+
 it('maps the full company record', function (): void {
     Http::fake(['www.zefix.admin.ch/*' => Http::response(ZefixFixtures::companyDetail())]);
 

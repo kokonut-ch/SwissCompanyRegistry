@@ -101,6 +101,20 @@ ZEFIX_PASSWORD=your-password
 
 Without credentials, calls routed to Zefix throw a `ConfigurationException` (see [docs/providers.md](providers.md#errors)).
 
+### Running without Zefix credentials
+
+With the default configuration (`default` is `zefix`), search and find calls throw a `ConfigurationException` when Zefix has no credentials. This is by design: configuration problems stay loud instead of being silently swallowed by falling back to another provider (see [docs/providers.md](providers.md#fallback-chain)).
+
+UID and VAT validation (`validateUid()`, `validateVatId()`) and town/zip-filtered searches work without any Zefix credentials, because only the UID register offers those capabilities and the call is routed there directly.
+
+To run entirely without Zefix credentials, set the UID register as the default provider:
+
+```env
+SWISS_COMPANY_REGISTRY_PROVIDER=uid-register
+```
+
+Every call is then served by the UID register, with fewer fields on the full company record (no `purpose`, no `capitalNominal` / `capitalCurrency`, those are Zefix-only).
+
 ## Test environment
 
 One switch flips both registries to their integration systems, useful for exercising search and validation flows without touching live data:

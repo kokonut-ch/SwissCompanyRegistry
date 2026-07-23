@@ -7,6 +7,7 @@ namespace Kokonut\SwissCompanyRegistry\Rules;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Kokonut\SwissCompanyRegistry\Enums\UidValidationResult;
+use Kokonut\SwissCompanyRegistry\Exceptions\UnsupportedCapabilityException;
 use Kokonut\SwissCompanyRegistry\Facades\SwissCompany;
 use Kokonut\SwissCompanyRegistry\Values\Uid;
 
@@ -33,7 +34,14 @@ class RegisteredUid implements ValidationRule
             return;
         }
 
-        $result = SwissCompany::validateUid($value);
+        // A misconfigured provider chain must never turn a form submission
+        // into a 500: no provider offering the capability is treated the
+        // same as an unreachable one (Unknown), not as a hard failure.
+        try {
+            $result = SwissCompany::validateUid($value);
+        } catch (UnsupportedCapabilityException) {
+            $result = UidValidationResult::Unknown;
+        }
 
         if ($result === UidValidationResult::Invalid) {
             $fail('The :attribute field is not registered in the Swiss UID register.');

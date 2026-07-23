@@ -6,6 +6,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Kokonut\SwissCompanyRegistry\Contracts\SearchesCompanies;
 use Kokonut\SwissCompanyRegistry\Enums\UidValidationResult;
+use Kokonut\SwissCompanyRegistry\Exceptions\ConfigurationException;
 use Kokonut\SwissCompanyRegistry\Exceptions\RegistryUnavailableException;
 use Kokonut\SwissCompanyRegistry\Exceptions\UnsupportedCapabilityException;
 use Kokonut\SwissCompanyRegistry\Facades\SwissCompany;
@@ -68,6 +69,24 @@ it('surfaces unavailability when every capable provider is down', function (): v
     registry()->search('aubry');
 })->throws(RegistryUnavailableException::class);
 
+it('falls back to the UID register when Zefix returns an unexpected response', function (): void {
+    Http::fake([
+        'www.zefix.admin.ch/*' => Http::response(['error' => ['message' => 'nope']], 400),
+        'www.uid-wse.admin.ch/*' => Http::response(UidRegisterFixtures::searchResponse()),
+    ]);
+
+    expect(registry()->search('aubry')->provider)->toBe('uid-register');
+});
+
+it('never falls back for a Zefix provider missing credentials: it throws loudly instead', function (): void {
+    Http::fake();
+
+    expect(fn (): SearchResults => registry(['providers' => ['zefix' => ['username' => null, 'password' => null]]])->search('aubry'))
+        ->toThrow(ConfigurationException::class);
+
+    Http::assertNothingSent();
+});
+
 it('routes UID validation to the UID register even when Zefix is the default', function (): void {
     Http::fake(['www.uid-wse.admin.ch/*' => Http::response(UidRegisterFixtures::validateResult('ValidateUID', true))]);
 
@@ -98,6 +117,30 @@ it('caches identical searches', function (): void {
 
     Http::assertSentCount(1);
 });
+
+it('does not cache an empty search result', function (): void {
+    Http::fake([
+        'www.zefix.admin.ch/*' => Http::sequence()
+            ->push([])
+            ->push(ZefixFixtures::searchResults()),
+    ]);
+
+    $registry = registry(['cache' => ['enabled' => true, 'prefix' => 'test-empty-search']]);
+
+    $first = $registry->search('aubry');
+    $second = $registry->search('aubry');
+
+    expect($first->isEmpty())->toBeTrue()
+        ->and($second->isEmpty())->toBeFalse();
+
+    Http::assertSentCount(2);
+});
+
+it('reports an unknown cache store as a configuration error', function (): void {
+    Http::fake(['www.zefix.admin.ch/*' => Http::response(ZefixFixtures::searchResults())]);
+
+    registry(['cache' => ['enabled' => true, 'store' => 'does-not-exist']])->search('aubry');
+})->throws(ConfigurationException::class);
 
 it('does not cache unknown validation results', function (): void {
     Http::fake(['www.uid-wse.admin.ch/*' => Http::response(null, 503)]);

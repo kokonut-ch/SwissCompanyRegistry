@@ -2,8 +2,10 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Facades\Http;
 use Kokonut\SwissCompanyRegistry\Facades\SwissCompany;
 use Kokonut\SwissCompanyRegistry\Testing\CompanyFactory;
+use Kokonut\SwissCompanyRegistry\Tests\Fixtures\ZefixFixtures;
 
 it('searches from the console', function (): void {
     SwissCompany::fake([
@@ -45,4 +47,16 @@ it('rejects an unparseable UID from the console', function (): void {
 
     $this->artisan('swiss-company:lookup', ['uid' => 'nope'])
         ->assertFailed();
+});
+
+it('shows the company and a capability-not-available line when validation is unsupported', function (): void {
+    $this->app['config']->set('swiss-company-registry.fallback', false);
+    $this->app['config']->set('swiss-company-registry.default', 'zefix');
+
+    Http::fake(['www.zefix.admin.ch/*' => Http::response(ZefixFixtures::companyDetail())]);
+
+    $this->artisan('swiss-company:lookup', ['uid' => 'CHE-107.185.562'])
+        ->expectsOutputToContain('Boulangerie Aubry')
+        ->expectsOutputToContain('not available with the current provider configuration')
+        ->assertSuccessful();
 });

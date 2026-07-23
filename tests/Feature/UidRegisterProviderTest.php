@@ -10,6 +10,7 @@ use Kokonut\SwissCompanyRegistry\Enums\LegalForm;
 use Kokonut\SwissCompanyRegistry\Enums\UidValidationResult;
 use Kokonut\SwissCompanyRegistry\Enums\VatValidationResult;
 use Kokonut\SwissCompanyRegistry\Exceptions\InvalidSearchQueryException;
+use Kokonut\SwissCompanyRegistry\Exceptions\RegistryUnavailableException;
 use Kokonut\SwissCompanyRegistry\Providers\UidRegisterProvider;
 use Kokonut\SwissCompanyRegistry\Search\SearchQuery;
 use Kokonut\SwissCompanyRegistry\Tests\Fixtures\UidRegisterFixtures;
@@ -93,6 +94,12 @@ it('sends canton, town and status filters in the SOAP envelope', function (): vo
         && str_contains($request->body(), '<cantonAbbreviation>JU</cantonAbbreviation>')
         && str_contains($request->body(), '<uidregStatusEnterpriseDetail>3</uidregStatusEnterpriseDetail>'));
 });
+
+it('reports a raw HTTP 429 as rate limiting', function (): void {
+    Http::fake(['www.uid-wse.admin.ch/*' => Http::response(null, 429)]);
+
+    uidRegisterProvider()->search(SearchQuery::make('aubry'));
+})->throws(RegistryUnavailableException::class);
 
 it('translates data-validation faults into invalid-query exceptions', function (): void {
     Http::fake(['www.uid-wse.admin.ch/*' => Http::response(

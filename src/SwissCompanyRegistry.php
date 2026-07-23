@@ -6,6 +6,8 @@ namespace Kokonut\SwissCompanyRegistry;
 
 use Closure;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
+use InvalidArgumentException;
 use Kokonut\SwissCompanyRegistry\Contracts\FindsCompanies;
 use Kokonut\SwissCompanyRegistry\Contracts\RegistryProvider;
 use Kokonut\SwissCompanyRegistry\Contracts\SearchesCompanies;
@@ -19,6 +21,7 @@ use Kokonut\SwissCompanyRegistry\Exceptions\ConfigurationException;
 use Kokonut\SwissCompanyRegistry\Exceptions\InvalidSearchQueryException;
 use Kokonut\SwissCompanyRegistry\Exceptions\InvalidUidException;
 use Kokonut\SwissCompanyRegistry\Exceptions\RegistryUnavailableException;
+use Kokonut\SwissCompanyRegistry\Exceptions\UnexpectedResponseException;
 use Kokonut\SwissCompanyRegistry\Exceptions\UnsupportedCapabilityException;
 use Kokonut\SwissCompanyRegistry\Providers\UidRegisterProvider;
 use Kokonut\SwissCompanyRegistry\Providers\ZefixProvider;
@@ -34,6 +37,13 @@ use Kokonut\SwissCompanyRegistry\Values\Uid;
  */
 class SwissCompanyRegistry
 {
+    /**
+     * Bump when the shape of cached DTOs changes, so stale serialized
+     * objects from an older release are never unserialized into new
+     * classes.
+     */
+    private const string CACHE_SCHEMA = 'v1';
+
     /** @var array<string, RegistryProvider> */
     protected array $resolved = [];
 
@@ -73,8 +83,18 @@ class SwissCompanyRegistry
                 return $this->remember(
                     'search:'.$provider->name().':'.$query->fingerprint(),
                     fn (): SearchResults => $provider->search($query),
+                    cacheable: fn (SearchResults $results): bool => ! $results->isEmpty(),
                 );
-            } catch (RegistryUnavailableException $exception) {
+            } catch (RegistryUnavailableException|UnexpectedResponseException $exception) {
+                // TooManyResultsException, InvalidSearchQueryException and
+                // ConfigurationException are caller-actionable: they must
+                // propagate immediately instead of triggering a fallback.
+                Log::warning('Swiss company registry search failed, trying next provider.', [
+                    'provider' => $provider->name(),
+                    'operation' => 'search',
+                    'message' => $exception->getMessage(),
+                ]);
+
                 $unavailable = $exception;
             }
         }
@@ -117,7 +137,16 @@ class SwissCompanyRegistry
                     fn (): ?Company => $provider->find($uid),
                     cacheable: fn (?Company $company): bool => $company !== null,
                 );
-            } catch (RegistryUnavailableException $exception) {
+            } catch (RegistryUnavailableException|UnexpectedResponseException $exception) {
+                // TooManyResultsException, InvalidSearchQueryException and
+                // ConfigurationException are caller-actionable: they must
+                // propagate immediately instead of triggering a fallback.
+                Log::warning('Swiss company registry lookup failed, trying next provider.', [
+                    'provider' => $provider->name(),
+                    'operation' => 'find',
+                    'message' => $exception->getMessage(),
+                ]);
+
                 $unavailable = $exception;
             }
         }
@@ -319,11 +348,17 @@ class SwissCompanyRegistry
         }
 
         $store = $cache['store'] ?? null;
+        $store = is_string($store) ? $store : null;
         $prefix = $cache['prefix'] ?? 'swiss-company-registry';
         $ttl = $cache['ttl'] ?? 21600;
 
-        $repository = Cache::store(is_string($store) ? $store : null);
-        $key = (is_string($prefix) ? $prefix : 'swiss-company-registry').':'.$key;
+        try {
+            $repository = Cache::store($store);
+        } catch (InvalidArgumentException) {
+            throw new ConfigurationException('Unknown cache store "'.$store.'" in swiss-company-registry.cache.store.');
+        }
+
+        $key = (is_string($prefix) ? $prefix : 'swiss-company-registry').':'.self::CACHE_SCHEMA.':'.$key;
 
         $cached = $repository->get($key);
 

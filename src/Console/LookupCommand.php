@@ -8,6 +8,7 @@ use Illuminate\Console\Command;
 use Kokonut\SwissCompanyRegistry\Enums\UidValidationResult;
 use Kokonut\SwissCompanyRegistry\Enums\VatValidationResult;
 use Kokonut\SwissCompanyRegistry\Exceptions\SwissCompanyRegistryException;
+use Kokonut\SwissCompanyRegistry\Exceptions\UnsupportedCapabilityException;
 use Kokonut\SwissCompanyRegistry\SwissCompanyRegistry;
 use Kokonut\SwissCompanyRegistry\Values\Uid;
 
@@ -61,20 +62,26 @@ class LookupCommand extends Command
             }
         }
 
-        $uidResult = $registry->validateUid($uid);
-        $vatResult = $registry->validateVatId($uid);
+        try {
+            $uidResult = $registry->validateUid($uid);
+            $vatResult = $registry->validateVatId($uid);
 
-        $this->line('  <comment>UID register</comment>   '.match ($uidResult) {
-            UidValidationResult::Valid => '<info>valid</info>',
-            UidValidationResult::Invalid => '<error>not registered</error>',
-            UidValidationResult::Unknown => 'could not be verified',
-        });
+            $this->line('  <comment>UID register</comment>   '.match ($uidResult) {
+                UidValidationResult::Valid => '<info>valid</info>',
+                UidValidationResult::Invalid => '<error>not registered</error>',
+                UidValidationResult::Unknown => 'could not be verified',
+            });
 
-        $this->line('  <comment>VAT register</comment>   '.match ($vatResult) {
-            VatValidationResult::Active => '<info>active</info>',
-            VatValidationResult::Inactive => '<error>not active</error>',
-            VatValidationResult::Unknown => 'could not be verified',
-        });
+            $this->line('  <comment>VAT register</comment>   '.match ($vatResult) {
+                VatValidationResult::Active => '<info>active</info>',
+                VatValidationResult::Inactive => '<error>not active</error>',
+                VatValidationResult::Unknown => 'could not be verified',
+            });
+        } catch (UnsupportedCapabilityException) {
+            // The company details were already shown; a provider chain
+            // that cannot validate is not a reason to fail the command.
+            $this->line('  <comment>Validation</comment>    not available with the current provider configuration');
+        }
 
         return self::SUCCESS;
     }

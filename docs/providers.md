@@ -24,7 +24,9 @@ Each call is routed to the first provider in the configured chain (the `default`
 1. Implements the capability contract the call needs (`SearchesCompanies`, `FindsCompanies`, `ValidatesUid`, `ValidatesVat`), and
 2. For searches, whose `supports()` accepts the exact combination of filters in use.
 
-On a `RegistryUnavailableException`, the next capable provider in the chain is tried. When `fallback` is disabled, only the default provider is ever consulted, so an outage propagates immediately instead of being retried elsewhere.
+On a `RegistryUnavailableException` or an `UnexpectedResponseException`, the next capable provider in the chain is tried, and a warning is logged with the provider name, the operation and the exception message. When `fallback` is disabled, only the default provider is ever consulted, so an outage propagates immediately instead of being retried elsewhere.
+
+`TooManyResultsException` and `InvalidSearchQueryException` never trigger a fallback: they mean the query itself needs narrowing or fixing, which the next provider cannot help with, so they propagate immediately to the caller. `ConfigurationException` never triggers a fallback either, by design: missing or rejected Zefix credentials, or an invalid `environment` value, are configuration problems, and configuration problems must stay loud rather than being silently masked by whichever provider happens to work. A Zefix provider without credentials therefore does not get skipped in favor of another provider; set `SWISS_COMPANY_REGISTRY_PROVIDER=uid-register` if you want to run without Zefix credentials at all (see [docs/configuration.md](configuration.md#zefix-credentials)).
 
 ## Forcing a provider
 
@@ -68,11 +70,11 @@ All exceptions extend `SwissCompanyRegistryException`:
 
 | Exception | Meaning |
 | --- | --- |
-| `RegistryUnavailableException` | Maintenance window, network failure or rate limiting; retry later |
+| `RegistryUnavailableException` | Maintenance window, network failure or rate limiting (including HTTP 429 from either registry); retry later |
 | `TooManyResultsException` | The term matches too many companies; narrow the search |
 | `InvalidSearchQueryException` | Filter combination no provider can honor, or rejected parameters |
 | `InvalidUidException` | `Uid::parse()` received something that is not a UID |
-| `ConfigurationException` | Missing credentials or unknown provider name |
+| `ConfigurationException` | Missing or rejected credentials (HTTP 401/403 from Zefix), an invalid environment value, or an unknown provider name |
 | `UnsupportedCapabilityException` | No configured provider offers the capability |
 | `UnexpectedResponseException` | The registry answered something unexpected |
 

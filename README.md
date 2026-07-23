@@ -78,6 +78,8 @@ ZEFIX_USERNAME=your-username
 ZEFIX_PASSWORD=your-password
 ```
 
+To run without Zefix credentials, set `SWISS_COMPANY_REGISTRY_PROVIDER=uid-register`; searches are then served by the UID register.
+
 ---
 
 ## Search

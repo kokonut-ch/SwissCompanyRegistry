@@ -25,3 +25,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Laravel validation rules `ValidUid`, `RegisteredUid`, `ActiveVatNumber`.
 - Testing fake (`SwissCompany::fake()`) with fluent `CompanyFactory`.
 - Artisan commands `swiss-company:search` and `swiss-company:lookup`.
+
+### Changed
+
+- Provider fallback now also triggers on `UnexpectedResponseException`, not only on
+  `RegistryUnavailableException`, and logs a warning naming the provider, the operation
+  and the exception message before trying the next one.
+- Empty search results are no longer cached, so a transient empty response does not get
+  served back for the rest of the cache TTL.
+
+### Fixed
+
+- `RegisteredUid`, `ActiveVatNumber` and `swiss-company:lookup` no longer crash when no
+  configured provider offers UID or VAT validation; they degrade to the same "could not
+  verify" outcome as an unreachable registry instead of throwing.
+- Zefix HTTP 401/403 responses are now reported as a `ConfigurationException` naming
+  `ZEFIX_USERNAME` / `ZEFIX_PASSWORD`, instead of an `UnexpectedResponseException`.
+- UID register HTTP 429 responses are now reported as `RegistryUnavailableException`
+  (rate limiting), matching the existing Zefix behavior.
+- An unknown cache store configured under `swiss-company-registry.cache.store` is now
+  reported as a `ConfigurationException` instead of letting Laravel's own
+  `InvalidArgumentException` escape.
