@@ -1,0 +1,29 @@
+Swiss Company Registry
+Copyright (c) 2026 Kokonut
+
+This product is licensed under the MIT License (see LICENSE.md).
+
+--------------------------------------------------------------------------------
+
+This package integrates with two official Swiss federal registries:
+
+    Zefix (Central Business Names Index), Federal Office of Justice
+    https://www.zefix.admin.ch
+
+    UID register, Federal Statistical Office
+    https://www.uid.admin.ch
+    Webservice specification: https://dam-api.bfs.admin.ch/hub/api/dam/assets/24605175/master
+
+What this package implements is the publicly documented request and response
+contracts of those two webservices: endpoints, parameters, field names and
+their meaning, and the eCH-0097 UID check-digit algorithm. That documentation
+is published openly by the Federal Office of Justice and the Federal
+Statistical Office for the purpose of being integrated against.
+
+No proprietary source code was copied from either administration, and this
+package is an independent implementation. It is not affiliated with, nor
+endorsed by, the Swiss federal administration, Zefix or the UID register.
+
+The acknowledgement is made because that is where the data and the interface
+contracts come from, and because attribution is owed whether or not any
+licence compels it here.
