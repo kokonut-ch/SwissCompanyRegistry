@@ -31,7 +31,7 @@ it('passes softly when the register is unreachable, unless strict', function ():
 });
 
 it('never lets an unsupported capability escape as an exception to the validator', function (): void {
-    $this->app['config']->set('swiss-company-registry.fallback', false);
+    $this->app['config']->set('swiss-company-registry.providers', ['zefix' => ['username' => 'u', 'password' => 'p']]);
     $this->app['config']->set('swiss-company-registry.default', 'zefix');
 
     expect(Validator::make(['uid' => 'CHE-109.322.551'], ['uid' => new RegisteredUid])->passes())->toBeTrue()

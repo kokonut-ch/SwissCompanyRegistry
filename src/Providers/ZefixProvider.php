@@ -23,6 +23,7 @@ use Kokonut\SwissCompanyRegistry\Exceptions\TooManyResultsException;
 use Kokonut\SwissCompanyRegistry\Exceptions\UnexpectedResponseException;
 use Kokonut\SwissCompanyRegistry\Search\SearchQuery;
 use Kokonut\SwissCompanyRegistry\Search\SearchResults;
+use Kokonut\SwissCompanyRegistry\Support\DisplayLocale;
 use Kokonut\SwissCompanyRegistry\Values\Uid;
 use Throwable;
 
@@ -280,9 +281,22 @@ final class ZefixProvider implements FindsCompanies, SearchesCompanies
             sogcDate: self::str($data, 'sogcDate'),
             deletionDate: self::str($data, 'deletionDate'),
             cantonalExcerptUrl: self::str($data, 'cantonalExcerptWeb'),
-            zefixUrl: is_array($zefixUrls) ? self::str($zefixUrls, 'en') : null,
+            zefixUrl: is_array($zefixUrls) ? $this->zefixDetailUrl($zefixUrls) : null,
             raw: $data,
         );
+    }
+
+    /**
+     * Picks the zefixDetailWeb URL for the resolved display locale,
+     * falling back to English, then to any other available entry.
+     *
+     * @param  array<array-key, mixed>  $urls
+     */
+    private function zefixDetailUrl(array $urls): ?string
+    {
+        return self::str($urls, DisplayLocale::resolve(null))
+            ?? self::str($urls, 'en')
+            ?? self::firstStr($urls);
     }
 
     /**
@@ -329,6 +343,24 @@ final class ZefixProvider implements FindsCompanies, SearchesCompanies
         }
 
         return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $data
+     */
+    private static function firstStr(array $data): ?string
+    {
+        foreach ($data as $value) {
+            if (is_int($value) || is_float($value)) {
+                $value = (string) $value;
+            }
+
+            if (is_string($value) && $value !== '') {
+                return $value;
+            }
+        }
+
+        return null;
     }
 
     /**

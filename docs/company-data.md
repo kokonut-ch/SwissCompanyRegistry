@@ -112,12 +112,14 @@ Backed by the official two-letter abbreviation used by both Zefix and the UID re
 
 ```php
 $company->canton?->label('fr');   // "Jura"
-$company->canton?->label();       // "Jura" (English default)
+$company->canton?->label();       // "Jura" (follows the display locale)
 ```
+
+With no argument, `label()` follows the configured display locale (`config('swiss-company-registry.locale')`), which itself defaults to the application locale; see [docs/configuration.md](configuration.md#display-language).
 
 | Method | Returns |
 | --- | --- |
-| `label(?string $locale = 'en')` | Full name in `'de'`, `'fr'`, `'it'` or `'en'` (falls back to English) |
+| `label(?string $locale = null)` | Full name in `'de'`, `'fr'`, `'it'` or `'en'` (falls back to English) |
 | `labels()` | `array{de, fr, it, en}` of the full name |
 
 ## `LegalForm`
@@ -131,8 +133,8 @@ $company->legalForm?->shortLabel('fr');  // "EI"
 
 | Method | Returns |
 | --- | --- |
-| `label(?string $locale = 'en')` | Full official name (falls back to English) |
-| `shortLabel(?string $locale = 'en')` | Short form, e.g. `"Ltd"` / `"SA"` / `"AG"` for `Corporation` (falls back to English) |
+| `label(?string $locale = null)` | Full official name; with no argument, follows the display locale (falls back to English) |
+| `shortLabel(?string $locale = null)` | Short form, e.g. `"Ltd"` / `"SA"` / `"AG"` for `Corporation`; with no argument, follows the display locale (falls back to English) |
 | `labels()` | `array{de, fr, it, en}` of the full name |
 | `shortLabels()` | `array{de, fr, it, en}` of the short form |
 | `zefixId()` | The internal numeric id used by the Zefix REST API |

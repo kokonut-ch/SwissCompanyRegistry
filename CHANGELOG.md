@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-23
+
+### Added
+
+- Display locale configuration (`SWISS_COMPANY_REGISTRY_LOCALE` / `swiss-company-registry.locale`),
+  defaulting to the application locale, driving the default language of enum labels, the default
+  VAT suffix and the Zefix detail link.
+
+### Changed
+
+- `Canton::label()`, `LegalForm::label()`, `LegalForm::shortLabel()`, `VatSuffix::forLocale()` and
+  `Uid::formatVat()` / `SwissUid::formatVat()` now default to the configured display locale instead
+  of always falling back to English / `TVA` when called without an explicit locale or suffix.
+
+### Removed
+
+- The outage-based provider fallback and the `fallback` config option
+  (`SWISS_COMPANY_REGISTRY_FALLBACK`). Provider selection is now strictly capability- and
+  filter-based: a failing provider's exception always propagates to the caller instead of being
+  retried on the next configured provider.
+
 ## [0.1.0] - 2026-07-23
 
 ### Added

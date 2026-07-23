@@ -111,6 +111,16 @@ it('maps the full company record', function (): void {
         ->and($company->zefixUrl)->toContain('zefix.admin.ch');
 });
 
+it('picks the Zefix detail link for the configured display locale', function (): void {
+    config()->set('swiss-company-registry.locale', 'fr');
+
+    Http::fake(['www.zefix.admin.ch/*' => Http::response(ZefixFixtures::companyDetail())]);
+
+    $company = zefixProvider()->find(Uid::parse('CHE-107.185.562'));
+
+    expect($company?->zefixUrl)->toBe('https://www.zefix.admin.ch/fr/search/entity/list?name=CHE107185562&directLink=true');
+});
+
 it('returns null when the UID is unknown', function (): void {
     Http::fake(['www.zefix.admin.ch/*' => Http::response([])]);
 

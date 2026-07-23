@@ -91,4 +91,4 @@ The default label is `"{name} ({legalSeat})"`, or just the name when the legal s
 
 ## `TooManyResultsException`
 
-Some providers refuse to answer when a term is too broad (typically an unfiltered one- or two-letter query). Narrow the search term or add filters (`canton()`, `legalForm()`, `limit()`) to avoid it; catching it and asking the user to be more specific is a reasonable UX fallback.
+Some providers refuse to answer when a term is too broad (typically an unfiltered one- or two-letter query). Narrow the search term or add filters (`canton()`, `legalForm()`, `limit()`) to avoid it; catching it and asking the user to be more specific is a reasonable UX approach.

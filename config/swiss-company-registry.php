@@ -35,18 +35,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Provider Fallback
+    | Display Locale
     |--------------------------------------------------------------------------
     |
-    | When enabled, a call is transparently routed to the next configured
-    | provider whenever the preferred one does not offer the capability
-    | (e.g. VAT validation on Zefix), cannot honor the query filters, or
-    | is temporarily unavailable. When disabled, only the default
-    | provider is ever consulted.
+    | The display language used by default for enum labels (Canton,
+    | LegalForm), the default VAT suffix (VatSuffix::forLocale()), and the
+    | Zefix detail link picked in the raw payload. Accepts "de", "fr",
+    | "it" or "en". Leave it null (the default) to follow the
+    | application locale (app()->getLocale()) instead. The registry data
+    | itself is always language-neutral; only the display of it changes.
     |
     */
 
-    'fallback' => (bool) env('SWISS_COMPANY_REGISTRY_FALLBACK', true),
+    'locale' => env('SWISS_COMPANY_REGISTRY_LOCALE'),
 
     /*
     |--------------------------------------------------------------------------

@@ -12,7 +12,7 @@ use Kokonut\SwissCompanyRegistry\Values\UidFactory;
  * @method static \Kokonut\SwissCompanyRegistry\Values\Uid|null tryParse(\Kokonut\SwissCompanyRegistry\Values\Uid|string|null $value)
  * @method static bool isValid(\Kokonut\SwissCompanyRegistry\Values\Uid|string|null $value)
  * @method static string|null format(\Kokonut\SwissCompanyRegistry\Values\Uid|string|null $value)
- * @method static string|null formatVat(\Kokonut\SwissCompanyRegistry\Values\Uid|string|null $value, \Kokonut\SwissCompanyRegistry\Enums\VatSuffix $suffix = \Kokonut\SwissCompanyRegistry\Enums\VatSuffix::TVA)
+ * @method static string|null formatVat(\Kokonut\SwissCompanyRegistry\Values\Uid|string|null $value, ?\Kokonut\SwissCompanyRegistry\Enums\VatSuffix $suffix = null)
  *
  * @see UidFactory
  */

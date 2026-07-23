@@ -41,8 +41,12 @@ class UidFactory
         return $this->tryParse($value)?->format();
     }
 
-    /** Official VAT number format: "CHE-123.456.789 TVA", or null when unparseable. */
-    public function formatVat(Uid|string|null $value, VatSuffix $suffix = VatSuffix::TVA): ?string
+    /**
+     * Official VAT number format: "CHE-123.456.789 TVA", or null when
+     * unparseable. With no suffix, the language-appropriate one is
+     * picked from the display locale (see `VatSuffix::forLocale()`).
+     */
+    public function formatVat(Uid|string|null $value, ?VatSuffix $suffix = null): ?string
     {
         return $this->tryParse($value)?->formatVat($suffix);
     }

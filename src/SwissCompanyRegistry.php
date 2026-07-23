@@ -6,7 +6,6 @@ namespace Kokonut\SwissCompanyRegistry;
 
 use Closure;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 use Kokonut\SwissCompanyRegistry\Contracts\FindsCompanies;
 use Kokonut\SwissCompanyRegistry\Contracts\RegistryProvider;
@@ -20,8 +19,6 @@ use Kokonut\SwissCompanyRegistry\Enums\VatValidationResult;
 use Kokonut\SwissCompanyRegistry\Exceptions\ConfigurationException;
 use Kokonut\SwissCompanyRegistry\Exceptions\InvalidSearchQueryException;
 use Kokonut\SwissCompanyRegistry\Exceptions\InvalidUidException;
-use Kokonut\SwissCompanyRegistry\Exceptions\RegistryUnavailableException;
-use Kokonut\SwissCompanyRegistry\Exceptions\UnexpectedResponseException;
 use Kokonut\SwissCompanyRegistry\Exceptions\UnsupportedCapabilityException;
 use Kokonut\SwissCompanyRegistry\Providers\UidRegisterProvider;
 use Kokonut\SwissCompanyRegistry\Providers\ZefixProvider;
@@ -31,9 +28,10 @@ use Kokonut\SwissCompanyRegistry\Values\Uid;
 
 /**
  * Routes each call to the first provider in the configured chain that
- * offers the required capability and can honor the query, falling back
- * to the next one when a registry is unavailable. Successful responses
- * are cached when caching is enabled.
+ * offers the required capability and can honor the query. Provider
+ * selection is never based on health: a failing provider's exception
+ * propagates to the caller. Successful responses are cached when
+ * caching is enabled.
  */
 class SwissCompanyRegistry
 {
@@ -64,7 +62,7 @@ class SwissCompanyRegistry
         $candidates = $this->capable(SearchesCompanies::class);
 
         if ($candidates === []) {
-            throw UnsupportedCapabilityException::for('company search', $this->fallbackEnabled());
+            throw UnsupportedCapabilityException::for('company search');
         }
 
         $supporting = array_values(array_filter(
@@ -76,30 +74,15 @@ class SwissCompanyRegistry
             throw new InvalidSearchQueryException('No available provider can honor this combination of search filters.');
         }
 
-        $unavailable = null;
+        // The first eligible provider serves the call; its failures
+        // propagate, provider selection is never based on health.
+        $provider = $supporting[0];
 
-        foreach ($supporting as $provider) {
-            try {
-                return $this->remember(
-                    'search:'.$provider->name().':'.$query->fingerprint(),
-                    fn (): SearchResults => $provider->search($query),
-                    cacheable: fn (SearchResults $results): bool => ! $results->isEmpty(),
-                );
-            } catch (RegistryUnavailableException|UnexpectedResponseException $exception) {
-                // TooManyResultsException, InvalidSearchQueryException and
-                // ConfigurationException are caller-actionable: they must
-                // propagate immediately instead of triggering a fallback.
-                Log::warning('Swiss company registry search failed, trying next provider.', [
-                    'provider' => $provider->name(),
-                    'operation' => 'search',
-                    'message' => $exception->getMessage(),
-                ]);
-
-                $unavailable = $exception;
-            }
-        }
-
-        throw $unavailable;
+        return $this->remember(
+            'search:'.$provider->name().':'.$query->fingerprint(),
+            fn (): SearchResults => $provider->search($query),
+            cacheable: fn (SearchResults $results): bool => ! $results->isEmpty(),
+        );
     }
 
     /**
@@ -125,33 +108,18 @@ class SwissCompanyRegistry
         $candidates = $this->capable(FindsCompanies::class);
 
         if ($candidates === []) {
-            throw UnsupportedCapabilityException::for('company lookup', $this->fallbackEnabled());
+            throw UnsupportedCapabilityException::for('company lookup');
         }
 
-        $unavailable = null;
+        // The first eligible provider serves the call; its failures
+        // propagate, provider selection is never based on health.
+        $provider = $candidates[0];
 
-        foreach ($candidates as $provider) {
-            try {
-                return $this->remember(
-                    'find:'.$provider->name().':'.$uid->value,
-                    fn (): ?Company => $provider->find($uid),
-                    cacheable: fn (?Company $company): bool => $company !== null,
-                );
-            } catch (RegistryUnavailableException|UnexpectedResponseException $exception) {
-                // TooManyResultsException, InvalidSearchQueryException and
-                // ConfigurationException are caller-actionable: they must
-                // propagate immediately instead of triggering a fallback.
-                Log::warning('Swiss company registry lookup failed, trying next provider.', [
-                    'provider' => $provider->name(),
-                    'operation' => 'find',
-                    'message' => $exception->getMessage(),
-                ]);
-
-                $unavailable = $exception;
-            }
-        }
-
-        throw $unavailable;
+        return $this->remember(
+            'find:'.$provider->name().':'.$uid->value,
+            fn (): ?Company => $provider->find($uid),
+            cacheable: fn (?Company $company): bool => $company !== null,
+        );
     }
 
     /**
@@ -170,22 +138,18 @@ class SwissCompanyRegistry
         $candidates = $this->capable(ValidatesUid::class);
 
         if ($candidates === []) {
-            throw UnsupportedCapabilityException::for('UID validation', $this->fallbackEnabled());
+            throw UnsupportedCapabilityException::for('UID validation');
         }
 
-        foreach ($candidates as $provider) {
-            $result = $this->remember(
-                'validate-uid:'.$provider->name().':'.$uid->value,
-                fn (): UidValidationResult => $provider->validateUid($uid),
-                cacheable: fn (UidValidationResult $result): bool => $result->isKnown(),
-            );
+        // The first eligible provider serves the call; its failures
+        // propagate, provider selection is never based on health.
+        $provider = $candidates[0];
 
-            if ($result->isKnown()) {
-                return $result;
-            }
-        }
-
-        return UidValidationResult::Unknown;
+        return $this->remember(
+            'validate-uid:'.$provider->name().':'.$uid->value,
+            fn (): UidValidationResult => $provider->validateUid($uid),
+            cacheable: fn (UidValidationResult $result): bool => $result->isKnown(),
+        );
     }
 
     /**
@@ -203,22 +167,18 @@ class SwissCompanyRegistry
         $candidates = $this->capable(ValidatesVat::class);
 
         if ($candidates === []) {
-            throw UnsupportedCapabilityException::for('VAT validation', $this->fallbackEnabled());
+            throw UnsupportedCapabilityException::for('VAT validation');
         }
 
-        foreach ($candidates as $provider) {
-            $result = $this->remember(
-                'validate-vat:'.$provider->name().':'.$uid->value,
-                fn (): VatValidationResult => $provider->validateVatId($uid),
-                cacheable: fn (VatValidationResult $result): bool => $result->isKnown(),
-            );
+        // The first eligible provider serves the call; its failures
+        // propagate, provider selection is never based on health.
+        $provider = $candidates[0];
 
-            if ($result->isKnown()) {
-                return $result;
-            }
-        }
-
-        return VatValidationResult::Unknown;
+        return $this->remember(
+            'validate-vat:'.$provider->name().':'.$uid->value,
+            fn (): VatValidationResult => $provider->validateVatId($uid),
+            cacheable: fn (VatValidationResult $result): bool => $result->isKnown(),
+        );
     }
 
     public function provider(?string $name = null): RegistryProvider
@@ -250,14 +210,9 @@ class SwissCompanyRegistry
         return is_string($default) ? $default : 'zefix';
     }
 
-    protected function fallbackEnabled(): bool
-    {
-        return (bool) ($this->config['fallback'] ?? true);
-    }
-
     /**
      * Provider chain in routing order: the default first, then every
-     * other configured or custom provider when fallback is enabled.
+     * other configured or custom provider.
      *
      * @return list<RegistryProvider>
      */
@@ -265,13 +220,11 @@ class SwissCompanyRegistry
     {
         $names = [$this->defaultProvider()];
 
-        if ($this->fallbackEnabled()) {
-            $configured = $this->config['providers'] ?? [];
+        $configured = $this->config['providers'] ?? [];
 
-            foreach ([...array_keys(is_array($configured) ? $configured : []), ...array_keys($this->customCreators)] as $name) {
-                if (! in_array($name, $names, true)) {
-                    $names[] = (string) $name;
-                }
+        foreach ([...array_keys(is_array($configured) ? $configured : []), ...array_keys($this->customCreators)] as $name) {
+            if (! in_array($name, $names, true)) {
+                $names[] = (string) $name;
             }
         }
 

@@ -1,6 +1,6 @@
 # Providers and errors
 
-The capability matrix, fallback chain, forcing a provider, custom providers, and the full exception table.
+The capability matrix, provider routing, forcing a provider, custom providers, and the full exception table.
 
 ## Capability matrix
 
@@ -17,16 +17,25 @@ The capability matrix, fallback chain, forcing a provider, custom providers, and
 
 See [docs/searching.md](searching.md#provider-auto-routing) for how search filters map onto this matrix.
 
-## Fallback chain
+## Provider routing
 
-Each call is routed to the first provider in the configured chain (the `default` provider first, see [docs/configuration.md](configuration.md#default-and-fallback)) that:
+The chain is the `default` provider first (see [docs/configuration.md](configuration.md#default)), then every other configured provider and every provider registered through `extend()`. The chain always contains every configured provider; it does not shrink or grow depending on provider health.
+
+A call is served by the first provider in the chain that:
 
 1. Implements the capability contract the call needs (`SearchesCompanies`, `FindsCompanies`, `ValidatesUid`, `ValidatesVat`), and
 2. For searches, whose `supports()` accepts the exact combination of filters in use.
 
-On a `RegistryUnavailableException` or an `UnexpectedResponseException`, the next capable provider in the chain is tried, and a warning is logged with the provider name, the operation and the exception message. When `fallback` is disabled, only the default provider is ever consulted, so an outage propagates immediately instead of being retried elsewhere.
+That is the only routing logic. Once that provider is picked, it is the one that serves the call, full stop: provider selection is never based on health, so its failures propagate straight to the caller instead of being retried elsewhere. Depending on what the provider does, the caller can expect:
 
-`TooManyResultsException` and `InvalidSearchQueryException` never trigger a fallback: they mean the query itself needs narrowing or fixing, which the next provider cannot help with, so they propagate immediately to the caller. `ConfigurationException` never triggers a fallback either, by design: missing or rejected Zefix credentials, or an invalid `environment` value, are configuration problems, and configuration problems must stay loud rather than being silently masked by whichever provider happens to work. A Zefix provider without credentials therefore does not get skipped in favor of another provider; set `SWISS_COMPANY_REGISTRY_PROVIDER=uid-register` if you want to run without Zefix credentials at all (see [docs/configuration.md](configuration.md#zefix-credentials)).
+- `RegistryUnavailableException`: maintenance window, network failure or rate limiting.
+- `UnexpectedResponseException`: the registry answered something unexpected.
+- `TooManyResultsException`: the term matches too many companies; narrow the search.
+- `InvalidSearchQueryException`: the query itself needs narrowing or fixing.
+
+Configuration errors are always loud, by design: missing or rejected Zefix credentials, an invalid `environment` value, or an unknown provider name raise a `ConfigurationException` instead of silently being masked by switching providers. A Zefix provider without credentials therefore does not get skipped in favor of another provider; set `SWISS_COMPANY_REGISTRY_PROVIDER=uid-register` if you want to run without Zefix credentials at all (see [docs/configuration.md](configuration.md#zefix-credentials)).
+
+When no configured provider offers the required capability at all, the call throws `UnsupportedCapabilityException` before any request is made.
 
 ## Forcing a provider
 

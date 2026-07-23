@@ -38,7 +38,7 @@ class SwissCompanyRegistryFake extends SwissCompanyRegistry
     /** @param list<Company> $companies */
     public function __construct(private readonly array $companies = [])
     {
-        parent::__construct(['cache' => ['enabled' => false], 'fallback' => false]);
+        parent::__construct(['cache' => ['enabled' => false]]);
     }
 
     /** Make every subsequent call behave as if the registries were down. */

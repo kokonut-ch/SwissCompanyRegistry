@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Kokonut\SwissCompanyRegistry\Enums;
 
+use Kokonut\SwissCompanyRegistry\Support\DisplayLocale;
+
 /**
  * Swiss legal forms, backed by their public eCH-0097 code. Labels and
  * short labels reproduce the official wording served by the Zefix
@@ -30,20 +32,28 @@ enum LegalForm: string
     case OwnershipInUndividedShares = '0119';
     case Branch = '0151';
 
-    /** @param 'de'|'fr'|'it'|'en'|string|null $locale Falls back to English. */
-    public function label(?string $locale = 'en'): string
+    /**
+     * @param  'de'|'fr'|'it'|'en'|string|null  $locale  Defaults to the
+     *                                                   configured display locale (see `DisplayLocale::resolve()`), itself
+     *                                                   falling back to English.
+     */
+    public function label(?string $locale = null): string
     {
         $labels = $this->labels();
 
-        return $labels[substr((string) $locale, 0, 2)] ?? $labels['en'];
+        return $labels[DisplayLocale::resolve($locale)] ?? $labels['en'];
     }
 
-    /** @param 'de'|'fr'|'it'|'en'|string|null $locale Falls back to English. */
-    public function shortLabel(?string $locale = 'en'): string
+    /**
+     * @param  'de'|'fr'|'it'|'en'|string|null  $locale  Defaults to the
+     *                                                   configured display locale (see `DisplayLocale::resolve()`), itself
+     *                                                   falling back to English.
+     */
+    public function shortLabel(?string $locale = null): string
     {
         $labels = $this->shortLabels();
 
-        return $labels[substr((string) $locale, 0, 2)] ?? $labels['en'];
+        return $labels[DisplayLocale::resolve($locale)] ?? $labels['en'];
     }
 
     /** @return array{de: string, fr: string, it: string, en: string} */

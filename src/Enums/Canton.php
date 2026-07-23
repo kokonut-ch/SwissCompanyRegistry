@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Kokonut\SwissCompanyRegistry\Enums;
 
+use Kokonut\SwissCompanyRegistry\Support\DisplayLocale;
+
 /**
  * The 26 Swiss cantons, backed by their official two-letter abbreviation
  * as used by both Zefix and the UID register.
@@ -37,12 +39,16 @@ enum Canton: string
     case ZG = 'ZG';
     case ZH = 'ZH';
 
-    /** @param 'de'|'fr'|'it'|'en'|string|null $locale Falls back to English. */
-    public function label(?string $locale = 'en'): string
+    /**
+     * @param  'de'|'fr'|'it'|'en'|string|null  $locale  Defaults to the
+     *                                                   configured display locale (see `DisplayLocale::resolve()`), itself
+     *                                                   falling back to English.
+     */
+    public function label(?string $locale = null): string
     {
         $labels = $this->labels();
 
-        return $labels[substr((string) $locale, 0, 2)] ?? $labels['en'];
+        return $labels[DisplayLocale::resolve($locale)] ?? $labels['en'];
     }
 
     /** @return array{de: string, fr: string, it: string, en: string} */

@@ -101,10 +101,14 @@ final readonly class Uid implements Stringable
         return sprintf('CHE-%s.%s.%s', substr($digits, 0, 3), substr($digits, 3, 3), substr($digits, 6, 3));
     }
 
-    /** Official VAT number format: "CHE-123.456.789 TVA" (or MWST/IVA). */
-    public function formatVat(VatSuffix $suffix = VatSuffix::TVA): string
+    /**
+     * Official VAT number format: "CHE-123.456.789 TVA" (or MWST/IVA).
+     * With no suffix, the language-appropriate one is picked from the
+     * display locale (see `VatSuffix::forLocale()`).
+     */
+    public function formatVat(?VatSuffix $suffix = null): string
     {
-        return $this->format().' '.$suffix->value;
+        return $this->format().' '.($suffix ?? VatSuffix::forLocale(null))->value;
     }
 
     public function equals(self|string|null $other): bool

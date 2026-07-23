@@ -22,7 +22,7 @@ SwissUid::formatVat($uid, VatSuffix::forLocale('de')); // "CHE-109.322.551 MWST"
 | `SwissUid::tryParse(Uid\|string\|null $value)` | Same, returns `null` instead of throwing |
 | `SwissUid::isValid(Uid\|string\|null $value)` | Parseable and carrying a correct eCH-0097 check digit |
 | `SwissUid::format(Uid\|string\|null $value)` | `format()` after `tryParse()`, or `null` when unparseable |
-| `SwissUid::formatVat(Uid\|string\|null $value, VatSuffix $suffix = VatSuffix::TVA)` | `formatVat()` after `tryParse()`, or `null` when unparseable |
+| `SwissUid::formatVat(Uid\|string\|null $value, ?VatSuffix $suffix = null)` | `formatVat()` after `tryParse()`, or `null` when unparseable; with no suffix, the default follows the display locale (see [docs/configuration.md](configuration.md#display-language)) |
 
 Like `SwissCompany`, the `SwissUid` alias is auto-registered by Laravel's package discovery (see `extra.laravel.aliases` in composer.json), so `\SwissUid::isValid(...)` works out of the box, without an import.
 
@@ -42,7 +42,7 @@ Parsing is lenient about separators and tolerates the TVA/MWST/IVA suffixes, as 
 | `digits()` | The 9 digits without the `CHE` prefix |
 | `hasValidCheckDigit()` | The modulo-11 eCH-0097 check digit (weights 5-4-3-2-7-6-5-4) is correct |
 | `format()` | Official display format: `"CHE-123.456.789"` |
-| `formatVat(VatSuffix $suffix = VatSuffix::TVA)` | Official VAT number format: `"CHE-123.456.789 TVA"` (or `MWST`/`IVA`) |
+| `formatVat(?VatSuffix $suffix = null)` | Official VAT number format: `"CHE-123.456.789 TVA"` (or `MWST`/`IVA`); with no suffix, the default follows the display locale |
 | `equals(self\|string\|null $other)` | Value equality after parsing `$other` |
 
 ## Online validation: tri-state results

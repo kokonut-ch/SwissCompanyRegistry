@@ -8,6 +8,7 @@ use Kokonut\SwissCompanyRegistry\Contracts\SearchesCompanies;
 use Kokonut\SwissCompanyRegistry\Enums\UidValidationResult;
 use Kokonut\SwissCompanyRegistry\Exceptions\ConfigurationException;
 use Kokonut\SwissCompanyRegistry\Exceptions\RegistryUnavailableException;
+use Kokonut\SwissCompanyRegistry\Exceptions\UnexpectedResponseException;
 use Kokonut\SwissCompanyRegistry\Exceptions\UnsupportedCapabilityException;
 use Kokonut\SwissCompanyRegistry\Facades\SwissCompany;
 use Kokonut\SwissCompanyRegistry\Search\SearchQuery;
@@ -23,7 +24,6 @@ function registry(array $overrides = []): SwissCompanyRegistry
 {
     return new SwissCompanyRegistry(array_replace_recursive([
         'default' => 'zefix',
-        'fallback' => true,
         'cache' => ['enabled' => false],
         'http' => ['retries' => 0],
         'providers' => [
@@ -51,31 +51,22 @@ it('routes town-filtered searches to the UID register because Zefix cannot filte
     Http::assertSentCount(1);
 });
 
-it('falls back to the UID register when Zefix is under maintenance', function (): void {
-    Http::fake([
-        'www.zefix.admin.ch/*' => Http::response(null, 503),
-        'www.uid-wse.admin.ch/*' => Http::response(UidRegisterFixtures::searchResponse()),
-    ]);
+it('surfaces a Zefix outage instead of falling back', function (): void {
+    Http::fake(['www.zefix.admin.ch/*' => Http::response(null, 503)]);
 
-    expect(registry()->search('aubry')->provider)->toBe('uid-register');
+    expect(fn (): SearchResults => registry()->search('aubry'))
+        ->toThrow(RegistryUnavailableException::class);
+
+    Http::assertNotSent(fn (Request $request): bool => str_starts_with($request->url(), 'https://www.uid-wse.admin.ch/'));
 });
 
-it('surfaces unavailability when every capable provider is down', function (): void {
-    Http::fake([
-        'www.zefix.admin.ch/*' => Http::response(null, 503),
-        'www.uid-wse.admin.ch/*' => Http::response(null, 503),
-    ]);
+it('surfaces an unexpected Zefix response instead of falling back', function (): void {
+    Http::fake(['www.zefix.admin.ch/*' => Http::response(['error' => ['message' => 'nope']], 400)]);
 
-    registry()->search('aubry');
-})->throws(RegistryUnavailableException::class);
+    expect(fn (): SearchResults => registry()->search('aubry'))
+        ->toThrow(UnexpectedResponseException::class);
 
-it('falls back to the UID register when Zefix returns an unexpected response', function (): void {
-    Http::fake([
-        'www.zefix.admin.ch/*' => Http::response(['error' => ['message' => 'nope']], 400),
-        'www.uid-wse.admin.ch/*' => Http::response(UidRegisterFixtures::searchResponse()),
-    ]);
-
-    expect(registry()->search('aubry')->provider)->toBe('uid-register');
+    Http::assertNotSent(fn (Request $request): bool => str_starts_with($request->url(), 'https://www.uid-wse.admin.ch/'));
 });
 
 it('never falls back for a Zefix provider missing credentials: it throws loudly instead', function (): void {
@@ -93,8 +84,15 @@ it('routes UID validation to the UID register even when Zefix is the default', f
     expect(registry()->validateUid('CHE-109.322.551'))->toBe(UidValidationResult::Valid);
 });
 
-it('rejects capability calls when fallback is disabled and the default cannot serve them', function (): void {
-    registry(['fallback' => false])->validateUid('CHE-109.322.551');
+it('throws when no configured provider offers the capability', function (): void {
+    $registry = new SwissCompanyRegistry([
+        'default' => 'zefix',
+        'cache' => ['enabled' => false],
+        'http' => ['retries' => 0],
+        'providers' => ['zefix' => ['username' => 'user', 'password' => 'secret']],
+    ]);
+
+    $registry->validateUid('CHE-109.322.551');
 })->throws(UnsupportedCapabilityException::class);
 
 it('short-circuits unparseable input without any network call', function (): void {

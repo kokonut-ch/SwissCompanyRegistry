@@ -16,7 +16,7 @@ This creates `config/swiss-company-registry.php`.
 | --- | --- | --- |
 | `SWISS_COMPANY_REGISTRY_PROVIDER` | `zefix` | Provider consulted first (`zefix` or `uid-register`) |
 | `SWISS_COMPANY_REGISTRY_ENVIRONMENT` | `production` | `test` targets both registries' integration systems |
-| `SWISS_COMPANY_REGISTRY_FALLBACK` | `true` | Route to the next capable provider on outage or missing capability |
+| `SWISS_COMPANY_REGISTRY_LOCALE` | application locale | Display language for labels, VAT suffixes and Zefix links (`de`, `fr`, `it` or `en`) |
 | `SWISS_COMPANY_REGISTRY_CACHE` | `true` | Cache successful registry responses |
 | `SWISS_COMPANY_REGISTRY_CACHE_STORE` | app default | Cache store to use |
 | `SWISS_COMPANY_REGISTRY_CACHE_TTL` | `21600` | Cache lifetime in seconds |
@@ -35,15 +35,29 @@ Retries only apply to connection failures, never to HTTP error responses.
 
 ## Config file walkthrough
 
-### `default` and `fallback`
+### `default`
 
-`default` is the provider consulted first for every call (`zefix` or `uid-register`, or any custom provider registered through `extend()`, see [docs/providers.md](providers.md)).
-
-`fallback` decides whether a call is transparently routed to the next configured provider when the preferred one does not offer the capability (e.g. VAT validation on Zefix), cannot honor the query filters, or is temporarily unavailable. When disabled, only the default provider is ever consulted. See [docs/providers.md](providers.md) for the full routing and fallback behavior.
+`default` is the provider consulted first for every call (`zefix` or `uid-register`, or any custom provider registered through `extend()`, see [docs/providers.md](providers.md)). Every other configured provider follows it in the chain, so a call is automatically routed further along the chain when the default does not offer the capability (e.g. VAT validation on Zefix) or cannot honor the query filters (e.g. town search on Zefix). See [docs/providers.md](providers.md) for the full routing behavior.
 
 ### `environment`
 
 `environment` is the global production/test switch: `test` targets both registries' integration systems (Zefix `zefixintg`, UID register `uid-wse-a`) instead of the live production endpoints. See [Test environment](#test-environment) below.
+
+### Display language
+
+```php
+'locale' => env('SWISS_COMPANY_REGISTRY_LOCALE'),
+```
+
+`locale` is the display language used, by default, for:
+
+- Enum labels: `Canton::label()`, `LegalForm::label()` and `LegalForm::shortLabel()`.
+- The default VAT suffix: `VatSuffix::forLocale()` and, through it, `Uid::formatVat()` / `SwissUid::formatVat()`.
+- The Zefix detail link picked in `Company->zefixUrl`.
+
+Accepts `de`, `fr`, `it` or `en`. Left `null` (the default), it follows the application locale (`app()->getLocale()`).
+
+An explicit locale argument passed to any of the methods above always wins over this setting, which in turn always wins over the application locale. The registry data itself is language-neutral: the UID register's public SOAP interface has no response-language parameter, and Zefix returns every language variant it has (see `zefixDetailWeb` in the raw payload). This setting only picks which of that already-present data to surface by default; it never changes what is fetched from the registries.
 
 ### `cache`
 
@@ -103,7 +117,7 @@ Without credentials, calls routed to Zefix throw a `ConfigurationException` (see
 
 ### Running without Zefix credentials
 
-With the default configuration (`default` is `zefix`), search and find calls throw a `ConfigurationException` when Zefix has no credentials. This is by design: configuration problems stay loud instead of being silently swallowed by falling back to another provider (see [docs/providers.md](providers.md#fallback-chain)).
+With the default configuration (`default` is `zefix`), search and find calls throw a `ConfigurationException` when Zefix has no credentials. This is by design: configuration problems stay loud instead of being silently swallowed by switching to another provider (see [docs/providers.md](providers.md#provider-routing)).
 
 UID and VAT validation (`validateUid()`, `validateVatId()`) and town/zip-filtered searches work without any Zefix credentials, because only the UID register offers those capabilities and the call is routed there directly.
 

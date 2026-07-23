@@ -12,7 +12,7 @@ This repository is a Laravel package. Keep the package focused, idiomatic, and e
 
 ## Architecture
 
-`SwissCompanyRegistry` (the facade root, bound as a singleton) routes each call to the first provider in the configured chain that implements the required capability contract (`SearchesCompanies`, `FindsCompanies`, `ValidatesUid`, `ValidatesVat`) and whose `supports()` accepts the query, falling back to the next capable provider on `RegistryUnavailableException`. Providers map registry payloads into the immutable DTOs (`Company`, `CompanySummary`, `Address`) and enums; nothing outside `src/Providers` touches raw registry payloads. `validateUid`/`validateVatId` never throw on outages; they return `Unknown`.
+`SwissCompanyRegistry` (the facade root, bound as a singleton) routes each call to the first provider in the configured chain that implements the required capability contract (`SearchesCompanies`, `FindsCompanies`, `ValidatesUid`, `ValidatesVat`) and whose `supports()` accepts the query. Provider selection is never based on health: a failing provider's exception propagates to the caller instead of triggering a fallback. Providers map registry payloads into the immutable DTOs (`Company`, `CompanySummary`, `Address`) and enums; nothing outside `src/Providers` touches raw registry payloads. `validateUid`/`validateVatId` never throw on outages; they return `Unknown`.
 
 - DTOs are `final readonly` with constructor-promoted, documented properties.
 - No new HTTP behavior without a matching `Http::fake()` test. Fixtures in `tests/Fixtures` mirror real captured responses; keep them realistic.

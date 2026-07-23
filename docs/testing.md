@@ -26,7 +26,7 @@ $fake->assertLookedUp('CHE-123.456.788');
 $fake->unavailable();
 ```
 
-`SwissCompany::fake(array $companies = [])` swaps the manager for an in-memory `SwissCompanyRegistryFake`: no network, no cache, no fallback (the fake never throws `RegistryUnavailableException` for a missing capability; it answers directly from the seeded `Company` list). It returns the fake instance so you can chain assertions or `unavailable()` on it.
+`SwissCompany::fake(array $companies = [])` swaps the manager for an in-memory `SwissCompanyRegistryFake`: no network, no cache, every call answered directly from the seeded `Company` list. It returns the fake instance so you can chain assertions or `unavailable()` on it.
 
 The fake's `search()` mimics real routing semantics closely enough for tests: fuzzy queries match anywhere in the name, non-fuzzy queries match from the start, and `canton`, `legalForm` and `activeOnly` filters are honored.
 
