@@ -24,12 +24,13 @@ class SearchCommand extends Command
 
     public function handle(SwissCompanyRegistry $registry): int
     {
+        $name = $this->argument('name');
         $canton = $this->option('canton');
         $legalForm = $this->option('legal-form');
         $limit = $this->option('limit');
 
         try {
-            $query = SearchQuery::make($this->argument('name'))
+            $query = SearchQuery::make(is_string($name) ? $name : '')
                 ->fuzzy((bool) $this->option('suggest'))
                 ->canton(is_string($canton) && $canton !== '' ? $canton : null)
                 ->legalForm(is_string($legalForm) && $legalForm !== '' ? $legalForm : null)

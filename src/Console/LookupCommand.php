@@ -21,7 +21,8 @@ class LookupCommand extends Command
 
     public function handle(SwissCompanyRegistry $registry): int
     {
-        $uid = Uid::tryParse($this->argument('uid'));
+        $raw = $this->argument('uid');
+        $uid = Uid::tryParse(is_string($raw) ? $raw : null);
 
         if ($uid === null) {
             $this->error('This does not look like a Swiss UID. Expected something like CHE-123.456.788.');

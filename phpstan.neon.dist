@@ -3,3 +3,6 @@ parameters:
     paths:
         - src
     tmpDir: build/phpstan
+    # Console argument() types differ between Laravel 12 and 13 in larastan's
+    # stubs; runtime guards must not be reported as redundant on either side.
+    treatPhpDocTypesAsCertain: false
