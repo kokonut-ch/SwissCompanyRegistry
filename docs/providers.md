@@ -1,6 +1,6 @@
 # Providers and errors
 
-The capability matrix, provider routing, forcing a provider, custom providers, and the full exception table.
+The capability matrix, provider routing and failover, forcing a provider, custom providers, and the full exception table.
 
 ## Capability matrix
 
@@ -26,16 +26,30 @@ A call is served by the first provider in the chain that:
 1. Implements the capability contract the call needs (`SearchesCompanies`, `FindsCompanies`, `ValidatesUid`, `ValidatesVat`), and
 2. For searches, whose `supports()` accepts the exact combination of filters in use.
 
-That is the only routing logic. Once that provider is picked, it is the one that serves the call, full stop: provider selection is never based on health, so its failures propagate straight to the caller instead of being retried elsewhere. Depending on what the provider does, the caller can expect:
-
-- `RegistryUnavailableException`: maintenance window, network failure or rate limiting.
-- `UnexpectedResponseException`: the registry answered something unexpected.
-- `TooManyResultsException`: the term matches too many companies; narrow the search.
-- `InvalidSearchQueryException`: the query itself needs narrowing or fixing.
-
-Configuration errors are always loud, by design: missing or rejected Zefix credentials, an invalid `environment` value, or an unknown provider name raise a `ConfigurationException` instead of silently being masked by switching providers. A Zefix provider without credentials therefore does not get skipped in favor of another provider; set `SWISS_COMPANY_REGISTRY_PROVIDER=uid-register` if you want to run without Zefix credentials at all (see [docs/configuration.md](configuration.md#zefix-credentials)).
-
 When no configured provider offers the required capability at all, the call throws `UnsupportedCapabilityException` before any request is made.
+
+## Failover
+
+When `failover` is enabled (it is opt-in, see [docs/configuration.md](configuration.md#failover)), a call whose provider fails is handed over to the next eligible provider in the chain, the one that offers the same capability and honors the same filters:
+
+| Outcome of a provider | Failover |
+| --- | --- |
+| `RegistryUnavailableException` (maintenance window, network failure, rate limiting) | ✅ next provider |
+| `UnexpectedResponseException` (the registry answered something unexpected) | ✅ next provider |
+| `Unknown` from `validateUid()` / `validateVatId()` (registry unreachable) | ✅ next provider |
+| `TooManyResultsException` (the term matches too many companies) | ❌ propagates |
+| `InvalidSearchQueryException` (the query needs narrowing or fixing) | ❌ propagates |
+| `ConfigurationException` of the first eligible provider | ❌ propagates |
+
+✅ the call is retried on the next provider, ❌ the exception reaches the caller immediately.
+
+Every provider skipped logs a warning naming the provider, the operation and the exception message. When every eligible provider fails, the exception of the first one is rethrown, so a `RegistryUnavailableException` still reaches the caller as such.
+
+A failed-over call may return a less complete record: a company found through the UID register has no `purpose` and no capital (see the capability matrix above). `SearchResults->provider` tells which registry answered a search.
+
+With `failover` disabled (the default), the first eligible provider serves the call, full stop: its failures propagate straight to the caller.
+
+Configuration errors are always loud, by design: missing or rejected Zefix credentials, an invalid `environment` value, or an unknown provider name raise a `ConfigurationException` instead of silently being masked by switching providers. A default Zefix provider without credentials therefore does not get skipped in favor of another provider; set `SWISS_COMPANY_REGISTRY_PROVIDER=uid-register` if you want to run without Zefix credentials at all (see [docs/configuration.md](configuration.md#zefix-credentials)). A misconfigured **backup**, on the other hand, is skipped with a warning during failover, so that it never hides the original outage.
 
 ## Forcing a provider
 

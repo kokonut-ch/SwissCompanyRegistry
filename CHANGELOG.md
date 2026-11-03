@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-03
+
+### Added
+
+- Opt-in failover between providers (`failover` config option, `SWISS_COMPANY_REGISTRY_FAILOVER`,
+  disabled by default): a call whose provider throws `RegistryUnavailableException` or
+  `UnexpectedResponseException`, or whose validation returns `Unknown`, is handed over to the next
+  provider offering the same capability and honoring the same filters. Each provider skipped logs a
+  warning naming the provider, the operation and the message; when every eligible provider fails, the
+  first exception is rethrown.
+
+- With failover enabled, `TooManyResultsException`, `InvalidSearchQueryException` and a
+  `ConfigurationException` raised by the first eligible provider still propagate immediately; a
+  misconfigured backup provider (e.g. Zefix without credentials behind a default UID register) is
+  skipped with a warning instead of masking the original outage.
+
+### Changed
+
+- None by default: with `failover` left disabled, routing behaves exactly as in 0.2 (capability- and
+  filter-based only, provider failures propagate to the caller).
+
 ## [0.2.0] - 2026-07-23
 
 ### Added

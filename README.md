@@ -86,7 +86,7 @@ SwissUid::parse('che 123 456 788')->formatVat();  // "CHE-123.456.788 TVA", offl
 | VAT registration details | ❌ | ✅ |
 | `ValidateUID` / `ValidateVatNumber` | ❌ | ✅ |
 
-Every call is routed to the first provider that offers the capability and supports the query filters; provider failures surface as exceptions, never as a silent switch. Choosing the default provider, forcing one per call and the production/test switch are covered in [docs/providers.md](docs/providers.md) and [docs/configuration.md](docs/configuration.md).
+Every call is routed to the first provider that offers the capability and supports the query filters; provider failures surface as exceptions, unless you opt in to failover (`SWISS_COMPANY_REGISTRY_FAILOVER=true`), which hands the call over to the next capable registry on an outage. Choosing the default provider, forcing one per call and the production/test switch are covered in [docs/providers.md](docs/providers.md) and [docs/configuration.md](docs/configuration.md).
 
 ---
 
@@ -98,7 +98,7 @@ Every call is routed to the first provider that offers the capability and suppor
 | [docs/searching.md](docs/searching.md) | `search()` vs `suggest()`, the full `SearchQuery` API, provider routing, `SearchResults` |
 | [docs/company-data.md](docs/company-data.md) | `Company`, `Address` (including its line-by-line API), and the `Canton` / `LegalForm` / `CompanyStatus` enums |
 | [docs/validation.md](docs/validation.md) | The `SwissUid` facade, the `Uid` value object, tri-state validation results, the three validation rules |
-| [docs/providers.md](docs/providers.md) | Capability matrix, provider routing, forcing a provider, custom providers, exceptions |
+| [docs/providers.md](docs/providers.md) | Capability matrix, provider routing, failover, forcing a provider, custom providers, exceptions |
 | [docs/testing.md](docs/testing.md) | The testing fake, `CompanyFactory`, assertions, and the artisan commands |
 
 [docs/README.md](docs/README.md) indexes all of the above, plus the feature highlights and the roadmap.

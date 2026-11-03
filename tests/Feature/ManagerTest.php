@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Kokonut\SwissCompanyRegistry\Contracts\SearchesCompanies;
 use Kokonut\SwissCompanyRegistry\Enums\UidValidationResult;
 use Kokonut\SwissCompanyRegistry\Exceptions\ConfigurationException;
 use Kokonut\SwissCompanyRegistry\Exceptions\RegistryUnavailableException;
+use Kokonut\SwissCompanyRegistry\Exceptions\TooManyResultsException;
 use Kokonut\SwissCompanyRegistry\Exceptions\UnexpectedResponseException;
 use Kokonut\SwissCompanyRegistry\Exceptions\UnsupportedCapabilityException;
 use Kokonut\SwissCompanyRegistry\Facades\SwissCompany;
@@ -51,7 +53,100 @@ it('routes town-filtered searches to the UID register because Zefix cannot filte
     Http::assertSentCount(1);
 });
 
-it('surfaces a Zefix outage instead of falling back', function (): void {
+it('fails over to the UID register when Zefix is under maintenance', function (): void {
+    Log::spy();
+
+    Http::fake([
+        'www.zefix.admin.ch/*' => Http::response(null, 503),
+        'www.uid-wse.admin.ch/*' => Http::response(UidRegisterFixtures::searchResponse()),
+    ]);
+
+    expect(registry(['failover' => true])->search('aubry')->provider)->toBe('uid-register');
+
+    Log::shouldHaveReceived('warning')->once()->withArgs(
+        fn (string $message, array $context): bool => $context['provider'] === 'zefix' && $context['operation'] === 'search',
+    );
+});
+
+it('fails over to the UID register on an unexpected Zefix response', function (): void {
+    Http::fake([
+        'www.zefix.admin.ch/*' => Http::response(['error' => ['message' => 'nope']], 400),
+        'www.uid-wse.admin.ch/*' => Http::response(UidRegisterFixtures::searchResponse()),
+    ]);
+
+    expect(registry(['failover' => true])->search('aubry')->provider)->toBe('uid-register');
+});
+
+it('fails over to the UID register for a company lookup when Zefix is unreachable', function (): void {
+    Http::fake([
+        'www.zefix.admin.ch/*' => Http::response(null, 503),
+        'www.uid-wse.admin.ch/*' => Http::response(UidRegisterFixtures::getByUidResponse()),
+    ]);
+
+    expect(registry(['failover' => true])->find('CHE-107.185.562')?->uid->value)->toBe('CHE107185562');
+});
+
+it('fails over to Zefix when the UID register is the default and is down', function (): void {
+    Http::fake([
+        'www.uid-wse.admin.ch/*' => Http::response(null, 503),
+        'www.zefix.admin.ch/*' => Http::response(ZefixFixtures::searchResults()),
+    ]);
+
+    expect(registry(['default' => 'uid-register', 'failover' => true])->search('aubry')->provider)->toBe('zefix');
+});
+
+it('rethrows the first outage when every eligible provider is down', function (): void {
+    Http::fake([
+        'www.zefix.admin.ch/*' => Http::response(null, 503),
+        'www.uid-wse.admin.ch/*' => Http::response(null, 503),
+    ]);
+
+    try {
+        registry(['failover' => true])->search('aubry');
+    } catch (RegistryUnavailableException $exception) {
+        expect($exception->provider)->toBe('zefix');
+
+        return;
+    }
+
+    test()->fail('Expected a RegistryUnavailableException.');
+});
+
+it('skips a misconfigured backup and rethrows the original outage', function (): void {
+    Http::fake(['www.uid-wse.admin.ch/*' => Http::response(null, 503)]);
+
+    $registry = registry([
+        'default' => 'uid-register',
+        'failover' => true,
+        'providers' => ['zefix' => ['username' => null, 'password' => null]],
+    ]);
+
+    try {
+        $registry->search('aubry');
+    } catch (RegistryUnavailableException $exception) {
+        expect($exception->provider)->toBe('uid-register');
+
+        Http::assertNotSent(fn (Request $request): bool => str_starts_with($request->url(), 'https://www.zefix.admin.ch/'));
+
+        return;
+    }
+
+    test()->fail('Expected a RegistryUnavailableException.');
+});
+
+it('never fails over when the query matches too many companies', function (): void {
+    Http::fake(['www.zefix.admin.ch/*' => Http::response(
+        ['error' => ['type' => 'RESULTLIST_TO_LARGE', 'message' => 'too many results']],
+        400,
+    )]);
+
+    expect(fn (): SearchResults => registry(['failover' => true])->search('aaa'))
+        ->toThrow(TooManyResultsException::class);
+
+    Http::assertNotSent(fn (Request $request): bool => str_starts_with($request->url(), 'https://www.uid-wse.admin.ch/'));
+});
+
+it('surfaces a Zefix outage when failover is disabled (the default)', function (): void {
     Http::fake(['www.zefix.admin.ch/*' => Http::response(null, 503)]);
 
     expect(fn (): SearchResults => registry()->search('aubry'))
@@ -60,19 +155,19 @@ it('surfaces a Zefix outage instead of falling back', function (): void {
     Http::assertNotSent(fn (Request $request): bool => str_starts_with($request->url(), 'https://www.uid-wse.admin.ch/'));
 });
 
-it('surfaces an unexpected Zefix response instead of falling back', function (): void {
+it('surfaces an unexpected Zefix response when failover is disabled', function (): void {
     Http::fake(['www.zefix.admin.ch/*' => Http::response(['error' => ['message' => 'nope']], 400)]);
 
-    expect(fn (): SearchResults => registry()->search('aubry'))
+    expect(fn (): SearchResults => registry(['failover' => false])->search('aubry'))
         ->toThrow(UnexpectedResponseException::class);
 
     Http::assertNotSent(fn (Request $request): bool => str_starts_with($request->url(), 'https://www.uid-wse.admin.ch/'));
 });
 
-it('never falls back for a Zefix provider missing credentials: it throws loudly instead', function (): void {
+it('never fails over for a default Zefix provider missing credentials: it throws loudly instead', function (): void {
     Http::fake();
 
-    expect(fn (): SearchResults => registry(['providers' => ['zefix' => ['username' => null, 'password' => null]]])->search('aubry'))
+    expect(fn (): SearchResults => registry(['failover' => true, 'providers' => ['zefix' => ['username' => null, 'password' => null]]])->search('aubry'))
         ->toThrow(ConfigurationException::class);
 
     Http::assertNothingSent();

@@ -35,6 +35,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Failover
+    |--------------------------------------------------------------------------
+    |
+    | Opt-in. When enabled and a registry is unavailable (maintenance
+    | window, network failure, rate limiting) or answers unexpectedly, the
+    | call is handed over to the next configured provider that offers the
+    | same capability. A warning is logged for every provider skipped.
+    | When disabled, outages of the first eligible provider surface
+    | immediately. Configuration errors of the first provider never fail
+    | over.
+    |
+    */
+
+    'failover' => (bool) env('SWISS_COMPANY_REGISTRY_FAILOVER', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Display Locale
     |--------------------------------------------------------------------------
     |

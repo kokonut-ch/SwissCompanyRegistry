@@ -6,6 +6,7 @@ namespace Kokonut\SwissCompanyRegistry;
 
 use Closure;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 use Kokonut\SwissCompanyRegistry\Contracts\FindsCompanies;
 use Kokonut\SwissCompanyRegistry\Contracts\RegistryProvider;
@@ -19,6 +20,8 @@ use Kokonut\SwissCompanyRegistry\Enums\VatValidationResult;
 use Kokonut\SwissCompanyRegistry\Exceptions\ConfigurationException;
 use Kokonut\SwissCompanyRegistry\Exceptions\InvalidSearchQueryException;
 use Kokonut\SwissCompanyRegistry\Exceptions\InvalidUidException;
+use Kokonut\SwissCompanyRegistry\Exceptions\RegistryUnavailableException;
+use Kokonut\SwissCompanyRegistry\Exceptions\UnexpectedResponseException;
 use Kokonut\SwissCompanyRegistry\Exceptions\UnsupportedCapabilityException;
 use Kokonut\SwissCompanyRegistry\Providers\UidRegisterProvider;
 use Kokonut\SwissCompanyRegistry\Providers\ZefixProvider;
@@ -28,9 +31,9 @@ use Kokonut\SwissCompanyRegistry\Values\Uid;
 
 /**
  * Routes each call to the first provider in the configured chain that
- * offers the required capability and can honor the query. Provider
- * selection is never based on health: a failing provider's exception
- * propagates to the caller. Successful responses are cached when
+ * offers the required capability and can honor the query. When failover
+ * is enabled (opt-in), an unavailable registry hands the call over to
+ * the next eligible provider. Successful responses are cached when
  * caching is enabled.
  */
 class SwissCompanyRegistry
@@ -74,15 +77,11 @@ class SwissCompanyRegistry
             throw new InvalidSearchQueryException('No available provider can honor this combination of search filters.');
         }
 
-        // The first eligible provider serves the call; its failures
-        // propagate, provider selection is never based on health.
-        $provider = $supporting[0];
-
-        return $this->remember(
+        return $this->attempt('search', $supporting, fn (SearchesCompanies $provider): SearchResults => $this->remember(
             'search:'.$provider->name().':'.$query->fingerprint(),
             fn (): SearchResults => $provider->search($query),
             cacheable: fn (SearchResults $results): bool => ! $results->isEmpty(),
-        );
+        ));
     }
 
     /**
@@ -111,15 +110,11 @@ class SwissCompanyRegistry
             throw UnsupportedCapabilityException::for('company lookup');
         }
 
-        // The first eligible provider serves the call; its failures
-        // propagate, provider selection is never based on health.
-        $provider = $candidates[0];
-
-        return $this->remember(
+        return $this->attempt('find', $candidates, fn (FindsCompanies $provider): ?Company => $this->remember(
             'find:'.$provider->name().':'.$uid->value,
             fn (): ?Company => $provider->find($uid),
             cacheable: fn (?Company $company): bool => $company !== null,
-        );
+        ));
     }
 
     /**
@@ -141,14 +136,15 @@ class SwissCompanyRegistry
             throw UnsupportedCapabilityException::for('UID validation');
         }
 
-        // The first eligible provider serves the call; its failures
-        // propagate, provider selection is never based on health.
-        $provider = $candidates[0];
-
-        return $this->remember(
-            'validate-uid:'.$provider->name().':'.$uid->value,
-            fn (): UidValidationResult => $provider->validateUid($uid),
-            cacheable: fn (UidValidationResult $result): bool => $result->isKnown(),
+        return $this->attempt(
+            'validate-uid',
+            $candidates,
+            fn (ValidatesUid $provider): UidValidationResult => $this->remember(
+                'validate-uid:'.$provider->name().':'.$uid->value,
+                fn (): UidValidationResult => $provider->validateUid($uid),
+                cacheable: fn (UidValidationResult $result): bool => $result->isKnown(),
+            ),
+            conclusive: fn (UidValidationResult $result): bool => $result->isKnown(),
         );
     }
 
@@ -170,14 +166,15 @@ class SwissCompanyRegistry
             throw UnsupportedCapabilityException::for('VAT validation');
         }
 
-        // The first eligible provider serves the call; its failures
-        // propagate, provider selection is never based on health.
-        $provider = $candidates[0];
-
-        return $this->remember(
-            'validate-vat:'.$provider->name().':'.$uid->value,
-            fn (): VatValidationResult => $provider->validateVatId($uid),
-            cacheable: fn (VatValidationResult $result): bool => $result->isKnown(),
+        return $this->attempt(
+            'validate-vat',
+            $candidates,
+            fn (ValidatesVat $provider): VatValidationResult => $this->remember(
+                'validate-vat:'.$provider->name().':'.$uid->value,
+                fn (): VatValidationResult => $provider->validateVatId($uid),
+                cacheable: fn (VatValidationResult $result): bool => $result->isKnown(),
+            ),
+            conclusive: fn (VatValidationResult $result): bool => $result->isKnown(),
         );
     }
 
@@ -201,6 +198,82 @@ class SwissCompanyRegistry
         unset($this->resolved[$name]);
 
         return $this;
+    }
+
+    /**
+     * Serve a call with the first eligible provider and, when failover is
+     * enabled, hand it over to the next one while a registry is
+     * unavailable or answers unexpectedly (or, for validations, cannot
+     * reach a verdict). TooManyResultsException and
+     * InvalidSearchQueryException always propagate at once: the next
+     * provider cannot fix the query. A ConfigurationException from the
+     * first provider propagates too, so configuration problems stay loud;
+     * a misconfigured backup is skipped with a warning so that it never
+     * masks the original outage, which is rethrown when no provider could
+     * serve the call.
+     *
+     * @template TProvider of RegistryProvider
+     * @template TValue
+     *
+     * @param  non-empty-list<TProvider>  $providers
+     * @param  Closure(TProvider): TValue  $call
+     * @param  (Closure(TValue): bool)|null  $conclusive
+     * @return TValue
+     */
+    protected function attempt(string $operation, array $providers, Closure $call, ?Closure $conclusive = null): mixed
+    {
+        if (! $this->failoverEnabled()) {
+            return $call($providers[0]);
+        }
+
+        $outage = null;
+        $result = null;
+        $hasResult = false;
+
+        foreach ($providers as $provider) {
+            try {
+                $result = $call($provider);
+            } catch (RegistryUnavailableException|UnexpectedResponseException $exception) {
+                Log::warning('Swiss company registry provider failed, failing over to the next one.', [
+                    'provider' => $provider->name(),
+                    'operation' => $operation,
+                    'message' => $exception->getMessage(),
+                ]);
+
+                $outage ??= $exception;
+
+                continue;
+            } catch (ConfigurationException $exception) {
+                if ($outage === null && ! $hasResult) {
+                    throw $exception;
+                }
+
+                Log::warning('Swiss company registry backup provider is misconfigured, skipping it.', [
+                    'provider' => $provider->name(),
+                    'operation' => $operation,
+                    'message' => $exception->getMessage(),
+                ]);
+
+                continue;
+            }
+
+            if ($conclusive === null || $conclusive($result)) {
+                return $result;
+            }
+
+            $hasResult = true;
+        }
+
+        if ($hasResult) {
+            return $result;
+        }
+
+        throw $outage ?? new RegistryUnavailableException($providers[0]->name(), "No provider could serve the {$operation} call.");
+    }
+
+    protected function failoverEnabled(): bool
+    {
+        return (bool) ($this->config['failover'] ?? false);
     }
 
     protected function defaultProvider(): string

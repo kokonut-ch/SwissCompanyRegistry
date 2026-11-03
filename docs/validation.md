@@ -75,7 +75,7 @@ Both enums expose:
 | `isKnown()` | False only when the register could not be consulted |
 | `::fromBool(?bool $value)` | `true → Valid/Active`, `false → Invalid/Inactive`, `null → Unknown` |
 
-`SwissCompany::validateUid()` and `SwissCompany::validateVatId()` never throw on outages; unparseable input yields `Invalid`/`Inactive` immediately (no network call), and an unreachable registry yields `Unknown`. See [docs/providers.md](providers.md#errors) for how this compares to the exceptions thrown elsewhere in the package.
+`SwissCompany::validateUid()` and `SwissCompany::validateVatId()` never throw on outages; unparseable input yields `Invalid`/`Inactive` immediately (no network call), and an unreachable registry yields `Unknown` (after trying the next capable provider when failover is enabled). See [docs/providers.md](providers.md#errors) for how this compares to the exceptions thrown elsewhere in the package.
 
 ## Validation rules
 

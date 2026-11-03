@@ -55,7 +55,7 @@ Provider-specific filters are routed automatically:
 - A query with `->registryOfCommerceId()` goes to Zefix.
 - A query with `->legalSeatId()` goes to Zefix.
 
-Each call is routed to the first provider in the chain (default first, see [docs/providers.md](providers.md)) whose `supports()` accepts the exact combination of filters in use; on an outage, the next capable provider is tried. When no configured provider can honor the combination, `InvalidSearchQueryException` explains why. See the [capability matrix](providers.md#capability-matrix) for exactly which filters each provider supports.
+Each call is routed to the first provider in the chain (default first, see [docs/providers.md](providers.md)) whose `supports()` accepts the exact combination of filters in use; on an outage, the next capable provider is tried when failover is enabled (see [docs/providers.md](providers.md#failover)). When no configured provider can honor the combination, `InvalidSearchQueryException` explains why. See the [capability matrix](providers.md#capability-matrix) for exactly which filters each provider supports.
 
 ## `SearchResults`
 

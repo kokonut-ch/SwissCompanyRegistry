@@ -16,6 +16,7 @@ This creates `config/swiss-company-registry.php`.
 | --- | --- | --- |
 | `SWISS_COMPANY_REGISTRY_PROVIDER` | `zefix` | Provider consulted first (`zefix` or `uid-register`) |
 | `SWISS_COMPANY_REGISTRY_ENVIRONMENT` | `production` | `test` targets both registries' integration systems |
+| `SWISS_COMPANY_REGISTRY_FAILOVER` | `false` | Opt-in: hand a call over to the next capable provider when a registry is unavailable |
 | `SWISS_COMPANY_REGISTRY_LOCALE` | application locale | Display language for labels, VAT suffixes and Zefix links (`de`, `fr`, `it` or `en`) |
 | `SWISS_COMPANY_REGISTRY_CACHE` | `true` | Cache successful registry responses |
 | `SWISS_COMPANY_REGISTRY_CACHE_STORE` | app default | Cache store to use |
@@ -38,6 +39,14 @@ Retries only apply to connection failures, never to HTTP error responses.
 ### `default`
 
 `default` is the provider consulted first for every call (`zefix` or `uid-register`, or any custom provider registered through `extend()`, see [docs/providers.md](providers.md)). Every other configured provider follows it in the chain, so a call is automatically routed further along the chain when the default does not offer the capability (e.g. VAT validation on Zefix) or cannot honor the query filters (e.g. town search on Zefix). See [docs/providers.md](providers.md) for the full routing behavior.
+
+### `failover`
+
+```php
+'failover' => (bool) env('SWISS_COMPANY_REGISTRY_FAILOVER', false),
+```
+
+Opt-in. When enabled and a registry is unavailable or answers unexpectedly, the call is handed over to the next configured provider that offers the same capability, and a warning is logged. Left disabled (the default), outages of the first eligible provider surface immediately. Configuration errors of the first provider never fail over. See [docs/providers.md](providers.md#failover) for the exact rules.
 
 ### `environment`
 
@@ -117,7 +126,7 @@ Without credentials, calls routed to Zefix throw a `ConfigurationException` (see
 
 ### Running without Zefix credentials
 
-With the default configuration (`default` is `zefix`), search and find calls throw a `ConfigurationException` when Zefix has no credentials. This is by design: configuration problems stay loud instead of being silently swallowed by switching to another provider (see [docs/providers.md](providers.md#provider-routing)).
+With the default configuration (`default` is `zefix`), search and find calls throw a `ConfigurationException` when Zefix has no credentials. This is by design: configuration problems stay loud instead of being silently swallowed by switching to another provider (see [docs/providers.md](providers.md#failover)). When the UID register is the default and failover is enabled, a Zefix backup without credentials is simply skipped.
 
 UID and VAT validation (`validateUid()`, `validateVatId()`) and town/zip-filtered searches work without any Zefix credentials, because only the UID register offers those capabilities and the call is routed there directly.
 
