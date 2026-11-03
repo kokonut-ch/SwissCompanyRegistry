@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.0] - 2026-11-03
+## [1.0.1] - 2026-11-03
 
 ### Added
 
@@ -35,6 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Development tooling: Pest `^5.0` and its Laravel and type-coverage plugins are accepted alongside
   4.x (Pest 5 needs PHP 8.4 and Laravel 13.23+, so PHP 8.3 and Laravel 12 keep Pest 4); minimum
   versions raised for Larastan (3.13), Pint (1.32) and Pao (1.1).
+
+## [1.0.0] - 2026-11-03
+
+Superseded the same day by 1.0.1, which ships the same opt-in failover together with the
+dependency updates. Install 1.0.1 instead.
 
 ## [0.2.0] - 2026-07-23
 
