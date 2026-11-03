@@ -28,6 +28,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - None by default: with `failover` left disabled, routing behaves exactly as in 0.2 (capability- and
   filter-based only, provider failures propagate to the caller).
 
+### Dependencies
+
+- `guzzlehttp/guzzle` now accepts `^8.0` alongside `^7.8` (Guzzle 8 is installed with Laravel 13;
+  Laravel 12 keeps Guzzle 7).
+- Development tooling: Pest `^5.0` and its Laravel and type-coverage plugins are accepted alongside
+  4.x (Pest 5 needs PHP 8.4 and Laravel 13.23+, so PHP 8.3 and Laravel 12 keep Pest 4); minimum
+  versions raised for Larastan (3.13), Pint (1.32) and Pao (1.1).
+
 ## [0.2.0] - 2026-07-23
 
 ### Added
